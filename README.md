@@ -321,3 +321,112 @@ if __name__ == "__main__":
     else:
         print("No VMs found in any of the projects")
 ```
+```python
+
+
+import csv
+import os
+from google.cloud import compute_v1
+from google.auth import default
+from google.auth.transport.requests import Request
+
+def get_projects_list():
+    """Reads project IDs from projectsinv file in script directory."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    projects_file = os.path.join(script_dir, 'projectsinv')
+    
+    try:
+        with open(projects_file, 'r') as f:
+            projects = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+        return projects
+    except FileNotFoundError:
+        print(f"Error: projectsinv file not found at {projects_file}")
+        return []
+    except Exception as e:
+        print(f"Error reading projectsinv file: {str(e)}")
+        return []
+
+def list_all_vms(project_id, credentials):
+    """Lists all VM instances in a GCP project."""
+    try:
+        instance_client = compute_v1.InstancesClient(credentials=credentials)
+        zone_client = compute_v1.ZonesClient(credentials=credentials)
+        
+        vms = []
+        zones = zone_client.list(project=project_id)
+        
+        for zone in zones:
+            zone_name = zone.name
+            instances = instance_client.list(project=project_id, zone=zone_name)
+            
+            for instance in instances:
+                vms.append({
+                    'Project': project_id,
+                    'Name': instance.name,
+                    'Zone': zone_name,
+                    'Status': instance.status,
+                    'Machine Type': instance.machine_type.split('/')[-1],
+                    'Internal IP': instance.network_interfaces[0].network_i_p if instance.network_interfaces else 'N/A',
+                    'External IP': instance.network_interfaces[0].access_configs[0].nat_i_p if instance.network_interfaces and instance.network_interfaces[0].access_configs else 'N/A',
+                    'Creation Timestamp': instance.creation_timestamp,
+                    'Labels': instance.labels if instance.labels else {}
+                })
+        
+        return vms
+    
+    except Exception as e:
+        print(f"Error listing VMs in project {project_id}: {str(e)}")
+        return []
+
+def export_to_csv(vm_list, filename="all_vms.csv"):
+    """Exports VM data to CSV."""
+    if not vm_list:
+        print("No VMs found to export.")
+        return
+    
+    fieldnames = [
+        'Project', 'Name', 'Zone', 'Status', 'Machine Type',
+        'Internal IP', 'External IP', 'Creation Timestamp', 'Labels'
+    ]
+    
+    try:
+        with open(filename, mode='w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(vm_list)
+        print(f"VM data exported to {filename}")
+    except Exception as e:
+        print(f"Error exporting to CSV: {str(e)}")
+
+def main():
+    """Main function to list VMs across all projects."""
+    projects = get_projects_list()
+    if not projects:
+        print("No projects found in projectsinv file.")
+        return
+    
+    all_vms = []
+    
+    # Get default credentials
+    credentials, _ = default()
+    
+    for project in projects:
+        print(f"\nProcessing project: {project}")
+        try:
+            vms = list_all_vms(project, credentials)
+            all_vms.extend(vms)
+            print(f"Found {len(vms)} VMs in {project}")
+        except Exception as e:
+            print(f"Error processing project {project}: {str(e)}")
+            continue
+    
+    if all_vms:
+        print(f"\nTotal VMs found across all projects: {len(all_vms)}")
+        export_to_csv(all_vms)
+    else:
+        print("\nNo VMs found in any project.")
+
+if __name__ == "__main__":
+    main()
+
+   ``` 
