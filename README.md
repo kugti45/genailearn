@@ -326,10 +326,14 @@ if __name__ == "__main__":
 import csv
 import os
 from google.cloud import compute_v1
-from google.oauth2 import service_account
+from google.auth import default
+import warnings
+
+# Suppress quota project warning
+warnings.filterwarnings("ignore", "Your application has authenticated")
 
 def get_projects_list():
-    """Reads project IDs from projectsinv file."""
+    """Read project IDs from projectsinv file"""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     projects_file = os.path.join(script_dir, 'projectsinv')
     
@@ -340,16 +344,15 @@ def get_projects_list():
         print(f"Error reading projectsinv: {str(e)}")
         return []
 
-def list_vms_with_retry(project_id, credentials):
-    """Lists VMs with retry logic."""
-    instance_client = compute_v1.InstancesClient(credentials=credentials)
-    zone_client = compute_v1.ZonesClient(credentials=credentials)
+def list_vms(project_id, credentials):
+    """List all VMs in a project"""
+    instances_client = compute_v1.InstancesClient(credentials=credentials)
+    zones_client = compute_v1.ZonesClient(credentials=credentials)
     
     vms = []
     try:
-        zones = zone_client.list(project=project_id)
-        for zone in zones:
-            instances = instance_client.list(project=project_id, zone=zone.name)
+        for zone in zones_client.list(project=project_id):
+            instances = instances_client.list(project=project_id, zone=zone.name)
             for instance in instances:
                 vms.append({
                     'Project': project_id,
@@ -361,7 +364,7 @@ def list_vms_with_retry(project_id, credentials):
                     'ExternalIP': instance.network_interfaces[0].access_configs[0].nat_i_p if instance.network_interfaces and instance.network_interfaces[0].access_configs else None
                 })
     except Exception as e:
-        print(f"Error listing VMs in {project_id}: {str(e)}")
+        print(f"Error in {project_id}: {str(e)}")
     return vms
 
 def main():
@@ -369,29 +372,25 @@ def main():
     if not projects:
         print("No projects found in projectsinv file")
         return
-
-    # Option 1: Use existing gcloud credentials
-    credentials, project = compute_v1.InstancesClient().transport._credentials, None
     
-    # Option 2: Use service account (uncomment below)
-    # credentials = service_account.Credentials.from_service_account_file('service-account.json')
+    # Use gcloud credentials
+    credentials, _ = default()
     
     all_vms = []
-    for project_id in projects:
-        print(f"Processing {project_id}...")
-        project_vms = list_vms_with_retry(project_id, credentials)
+    for project in projects:
+        print(f"Processing {project}...")
+        project_vms = list_vms(project, credentials)
         all_vms.extend(project_vms)
         print(f"Found {len(project_vms)} VMs")
-
+    
     if all_vms:
-        keys = all_vms[0].keys()
         with open('vms_report.csv', 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=keys)
+            writer = csv.DictWriter(f, fieldnames=all_vms[0].keys())
             writer.writeheader()
             writer.writerows(all_vms)
-        print(f"Report saved to vms_report.csv ({len(all_vms)} VMs)")
+        print(f"\nReport saved to vms_report.csv ({len(all_vms)} VMs total)")
     else:
-        print("No VMs found in any project")
+        print("\nNo VMs found in any project")
 
 if __name__ == "__main__":
     main()
