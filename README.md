@@ -3,78 +3,49 @@ Here's a Python code snippet:
 ```python
 import csv
 import os
-import subprocess
 from google.cloud import compute_v1
-from google.auth import exceptions, default
-from google.auth.transport import requests
-
-def authenticate_project(project_id):
-    """Authenticate with specific project using gcloud."""
-    try:
-        # Set the active project
-        subprocess.run([
-            'gcloud', 'auth', 'application-default', 'login',
-            '--project', project_id
-        ], check=True)
-        
-        # Get credentials
-        credentials, _ = default()
-        return credentials
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to authenticate project {project_id}: {str(e)}")
-        return None
-    except exceptions.DefaultCredentialsError as e:
-        print(f"Credentials error for project {project_id}: {str(e)}")
-        return None
 
 def get_projects_list():
     """Reads projects from projectsinv file in script directory."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     projects_file = os.path.join(script_dir, 'projectsinv')
     
-    try:
-        with open(projects_file, 'r') as f:
-            projects = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-        return projects
-    except FileNotFoundError:
-        print(f"Error: projectsinv file not found at {projects_file}")
-        return []
-    except Exception as e:
-        print(f"Error reading projectsinv file: {str(e)}")
-        return []
+    with open(projects_file, 'r') as f:
+        projects = [line.strip() for line in f if line.strip()]
+    return projects
 
-def find_unattached_disks(project_id, credentials):
+def find_unattached_disks(project_id):
     """Finds all unattached disks in a GCP project."""
-    try:
-        disk_client = compute_v1.DisksClient(credentials=credentials)
-        zones_client = compute_v1.ZonesClient(credentials=credentials)
-        
-        unattached_disks = []
-        zones = zones_client.list(project=project_id)
-        
-        for zone in zones:
-            zone_name = zone.name
-            disks = disk_client.list(project=project_id, zone=zone_name)
-            
-            for disk in disks:
-                if not disk.users:
-                    unattached_disks.append({
-                        'Project': project_id,
-                        'Disk Name': disk.name,
-                        'Zone': zone_name,
-                        'Size (GB)': disk.size_gb,
-                        'Type': disk.type_.split('/')[-1],
-                        'Status': disk.status,
-                        'Creation Timestamp': disk.creation_timestamp,
-                        'Last Attach Timestamp': disk.last_attach_timestamp,
-                        'Last Detach Timestamp': disk.last_detach_timestamp
-                    })
-        
-        return unattached_disks
+    disk_client = compute_v1.DisksClient()
+    zone_operations_client = compute_v1.ZoneOperationsClient()
     
-    except Exception as e:
-        print(f"Error finding disks in project {project_id}: {str(e)}")
-        return []
+    unattached_disks = []
+    
+    # List all zones in the project
+    zones_client = compute_v1.ZonesClient()
+    zones = zones_client.list(project=project_id)
+    
+    for zone in zones:
+        zone_name = zone.name
+        
+        # List all disks in the zone
+        disks = disk_client.list(project=project_id, zone=zone_name)
+        
+        for disk in disks:
+            if not disk.users:
+                unattached_disks.append({
+                    'Project': project_id,
+                    'Disk Name': disk.name,
+                    'Zone': zone_name,
+                    'Size (GB)': disk.size_gb,
+                    'Type': disk.type_.split('/')[-1],  # Extract disk type
+                    'Status': disk.status,
+                    'Creation Timestamp': disk.creation_timestamp,
+                    'Last Attach Timestamp': disk.last_attach_timestamp,
+                    'Last Detach Timestamp': disk.last_detach_timestamp
+                })
+    
+    return unattached_disks
 
 def export_to_csv(unattached_disks, filename="unattached_disks.csv"):
     """Exports unattached disks data to CSV."""
@@ -83,55 +54,47 @@ def export_to_csv(unattached_disks, filename="unattached_disks.csv"):
         return
     
     fieldnames = [
-        'Project', 'Disk Name', 'Zone', 'Size (GB)', 'Type',
-        'Status', 'Creation Timestamp', 'Last Attach Timestamp',
+        'Project',
+        'Disk Name',
+        'Zone',
+        'Size (GB)',
+        'Type',
+        'Status',
+        'Creation Timestamp',
+        'Last Attach Timestamp',
         'Last Detach Timestamp'
     ]
     
-    try:
-        with open(filename, mode='w', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(unattached_disks)
-        print(f"Data exported to {filename}")
-    except Exception as e:
-        print(f"Error exporting to CSV: {str(e)}")
+    with open(filename, mode='w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(unattached_disks)
+    
+    print(f"Data exported to {filename}")
 
 def main():
     """Main function to find unattached disks across all projects."""
     projects = get_projects_list()
-    if not projects:
-        print("No projects found in projectsinv file.")
-        return
-    
     all_unattached_disks = []
     
     for project in projects:
-        print(f"\nChecking project: {project}")
-        credentials = authenticate_project(project)
-        if not credentials:
-            continue
-            
+        print(f"Checking project: {project}")
         try:
-            unattached_disks = find_unattached_disks(project, credentials)
+            unattached_disks = find_unattached_disks(project)
             all_unattached_disks.extend(unattached_disks)
             print(f"Found {len(unattached_disks)} unattached disks in {project}")
-        except requests.exceptions.RequestException as e:
-            print(f"Network error processing project {project}: {str(e)}")
-            continue
         except Exception as e:
-            print(f"Unexpected error processing project {project}: {str(e)}")
+            print(f"Error processing project {project}: {str(e)}")
             continue
     
     if all_unattached_disks:
         print(f"\nTotal unattached disks found: {len(all_unattached_disks)}")
         export_to_csv(all_unattached_disks)
     else:
-        print("\nNo unattached disks found in any project.")
+        print("No unattached disks found in any project.")
 
 if __name__ == "__main__":
     main()
-
 ```
 ```python
 
