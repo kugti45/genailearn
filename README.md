@@ -1,6 +1,6 @@
-Here's a Python code snippet:
 
 ```python
+
 import csv
 import os
 from google.cloud import compute_v1
@@ -95,6 +95,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 ```
 ```python
 
