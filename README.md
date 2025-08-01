@@ -359,4 +359,59 @@ def main():
 if __name__ == "__main__":
     main()
 
-   ``` 
+   ```
+
+
+Cost Savings from Disabling Soft Delete
+Immediate Storage Reduction
+
+Soft-deleted objects continue to incur storage charges during retention period (default 7 days)
+
+Disabling eliminates this retention cost entirely
+Example: 1TB of deleted files saves ~$23/month (at $0.023/GB) that would otherwise be charged during soft-delete period.
+
+No Additional Operations Costs
+
+Soft-deleted objects still count toward:
+
+Class A operations (when accessed/managed)
+
+Class B operations (when listed)
+
+Disabling removes these operational charges
+
+Avoids Early Deletion Fees
+
+For Nearline/Coldline/Archive storage classes:
+
+Soft-deleted objects trigger early deletion fees if not retained for minimum durations
+
+Disabling soft delete avoids these fees entirely
+
+Simplified Cost Tracking
+
+Eliminates monitoring complexity for:
+
+Hidden soft-delete storage usage
+
+Unexpected retention costs
+
+Trade-Offs to Consider
+Benefit	Risk
+Immediate cost savings	No recovery of accidentally deleted files
+Predictable billing	May require alternative protection (versioning, backups)
+Avoids minimum storage duration fees	Loses built-in safety net
+When to Disable (Best Use Cases)
+Non-critical/temporary data
+
+Logs, cached files, or ephemeral data
+
+Where recreation is cheaper than retention
+
+High-churn environments
+
+Buckets with frequent deletions (e.g., CI/CD artifacts)
+
+Cost-optimized archives
+
+When using Archive storage class (avoids 365-day minimum retention fees)
