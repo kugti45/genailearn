@@ -81,7 +81,7 @@ pip install google-api-python-client google-cloud-monitoring
 ```
 24 hours metrics
 
-```
+```python
 from googleapiclient import discovery
 from google.cloud import monitoring_v3
 from datetime import datetime, timedelta
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     print(f"\nMetrics saved to {output_file}")
 ```
 24 days metrics
-```
+```python
 from googleapiclient import discovery
 from google.cloud import monitoring_v3
 from datetime import datetime, timedelta
@@ -305,4 +305,12 @@ if __name__ == "__main__":
     df.to_excel(output_file, index=False)
     print(f"\nMetrics saved to {output_file}")
 
+```
+PIP packages required
+```shell
+pip install --upgrade pip
+pip install google-api-python-client
+pip install google-auth google-auth-httplib2 google-auth-oauthlib
+pip install openpyxl
+pip install pandas
 ```
